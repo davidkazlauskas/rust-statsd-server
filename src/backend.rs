@@ -1,6 +1,7 @@
 use buckets::Buckets;
 use backends::console;
 use backends::graphite;
+use backends::statsd;
 
 /// Defines the interface that backends use to publish
 /// metrics to their storage system.
@@ -18,7 +19,11 @@ pub trait Backend {
 pub fn factory(console: &bool,
                graphite: &bool,
                graphite_host: &str,
-               graphite_port: &u16)
+               graphite_port: &u16,
+               statsd: &bool,
+               statsd_host: &str,
+               statsd_port: &u16,
+               statsd_packet_limit: &usize)
                -> Box<[Box<Backend>]> {
     let mut backends: Vec<Box<Backend>> = Vec::with_capacity(2);
     if *console {
@@ -26,6 +31,11 @@ pub fn factory(console: &bool,
     }
     if *graphite {
         backends.push(Box::new(graphite::Graphite::new(graphite_host, *graphite_port)));
+    }
+    if *statsd {
+        backends.push(Box::new(statsd::Statsd::new(
+            statsd_host, *statsd_port, *statsd_packet_limit
+        )))
     }
     backends.into_boxed_slice()
 }
@@ -37,19 +47,37 @@ mod test {
 
     #[test]
     fn factory_makes_graphite() {
-        let backends = factory(&false, &true, "127.0.0.1", &2300);
+        let backends = factory(
+            &false, &true, "127.0.0.1", &2300,
+            &false, &"", &0, &0
+        );
         assert_eq!(1, backends.len());
     }
 
     #[test]
     fn factory_makes_console() {
-        let backends = factory(&true, &false, "127.0.0.1", &2300);
+        let backends = factory(
+            &true, &false, "127.0.0.1", &2300,
+            &false, &"", &0, &0
+        );
+        assert_eq!(1, backends.len());
+    }
+
+    #[test]
+    fn factory_makes_statsd() {
+        let backends = factory(
+            &false, &false, "127.0.0.1", &2300,
+            &true, &"127.0.0.1", &8125, &(16 * 1024)
+        );
         assert_eq!(1, backends.len());
     }
 
     #[test]
     fn factory_makes_both() {
-        let backends = factory(&true, &true, "127.0.0.1", &2300);
+        let backends = factory(
+            &true, &true, "127.0.0.1", &2300,
+            &false, &"", &0, &0
+        );
         assert_eq!(2, backends.len());
     }
 }
