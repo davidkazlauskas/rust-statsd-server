@@ -125,9 +125,7 @@ impl Metric {
         // to get types to match
         let kind = match &*kind_name {
             "ms" => MetricKind::Timer,
-            "g" => {
-                if unsigned { MetricKind::Gauge } else { MetricKind::GaugeDelta }
-            },
+            "g" => MetricKind::Gauge,
             "c" => {
                 let rate: f64 = match line[idx..].find('@') {
                     Some(pos) => {
