@@ -4,57 +4,53 @@ use std::net::{Ipv4Addr, TcpStream, TcpListener, SocketAddrV4};
 use std::net::ToSocketAddrs;
 use std::thread::sleep;
 use std::time::Duration;
-use std::io;
-use std::net::SocketAddr;
-use tokio_core::net::{UdpSocket, UdpCodec};
-use tokio_core::reactor::Core;
-use futures::{Stream};
-use futures::future;
+use std::error::Error;
+use tokio::net::UdpSocket;
+use tokio_util::udp::UdpFramed;
+use futures::{StreamExt};
+use tokio_util::codec::BytesCodec;
+use tokio::runtime::{Builder};
+use crate::metric::{Metric, ParseError};
+use crate::server::Event::ParsedMetrics;
 
 /// Acceptable event types.
 ///
 pub enum Event {
-    UdpMessage(Vec<u8>),
+    ParsedMetrics(Result<Vec<Metric>, ParseError>),
     TcpMessage(TcpStream),
     TimerFlush,
 }
 
-pub struct LineCodec;
-
-impl UdpCodec for LineCodec {
-    type In = (SocketAddr, Vec<u8>);
-    type Out = (SocketAddr, Vec<u8>);
-
-    fn decode(&mut self, addr: &SocketAddr, buf: &[u8]) -> io::Result<Self::In> {
-        Ok((*addr, buf.to_vec()))
-    }
-
-    fn encode(&mut self, (addr, buf): Self::Out, into: &mut Vec<u8>) -> SocketAddr {
-        into.extend(buf);
-        addr
-    }
-}
-
 /// Setup the UDP socket that listens for metrics and
 /// publishes them into the bucket storage.
-pub fn udp_server(chan: SyncSender<Event>, port: u16) {
-    let mut core = Core::new().unwrap();
-    let handle = core.handle();
+pub fn udp_server(chan: SyncSender<Event>, port: u16) -> Result<(), Box<dyn Error>> {
+    let mut rt =
+        Builder::new()
+            .threaded_scheduler()
+            .core_threads(32)
+            .thread_name("statsd-parsers")
+            .enable_all()
+            .build()
+            .unwrap();
 
-    let addr = SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port);
-    let addr = addr.to_socket_addrs().unwrap().last().unwrap();
+    rt.block_on(async {
+        let addr = SocketAddrV4::new(Ipv4Addr::new(0, 0, 0, 0), port);
+        let addr = addr.to_socket_addrs().unwrap().last().unwrap();
 
-    let socket = UdpSocket::bind(&addr, &handle).unwrap();
-    let (_, stream) =
-        socket.framed(LineCodec).split();
+        let socket = UdpSocket::bind(&addr).await?;
+        let mut framed = UdpFramed::new(socket, BytesCodec::new());
 
-    let stream = stream.for_each(|(_addr, msg)| {
-        let res = chan.send(Event::UdpMessage(Vec::from(msg)));
-        res.expect("Cannot send udp message to channel");
-        future::ok(())
-    });
-    let res = core.run(stream);
-    res.expect("Udp metrics socket failed");
+        while let Some(Ok((bytes, _addr))) = framed.next().await {
+            let chan = chan.clone();
+            tokio::spawn(async move {
+                let str = String::from_utf8_lossy(bytes.as_ref());
+                let parsed = Metric::parse(&str);
+                let _ = chan.try_send(ParsedMetrics(parsed));
+            });
+        }
+
+        Ok(())
+    })
 }
 
 /// Setup the TCP socket that listens for management commands.

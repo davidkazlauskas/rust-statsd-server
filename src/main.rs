@@ -1,17 +1,9 @@
 #[macro_use]
 extern crate serde_derive;
-extern crate tokio_core;
-extern crate futures;
-
-extern crate serde;
-extern crate time;
-extern crate docopt;
 
 use std::thread;
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex};
-use std::str;
-
 
 // Local module imports.
 mod metric;
@@ -73,7 +65,7 @@ fn main() {
     // Setup the UDP server which publishes events to the event channel
     let port = args.flag_port;
     thread::spawn(move || {
-        server::udp_server(udp_send, port);
+        let _ = server::udp_server(udp_send, port);
     });
 
     // Setup the TCP server for administration
@@ -108,22 +100,18 @@ fn main() {
                 *buckets_snapshot.lock().unwrap() = snapshot
             }
 
-            server::Event::UdpMessage(buf) => {
+            server::Event::ParsedMetrics(buf) => {
                 // Create the metric and push it into the buckets.
-                str::from_utf8(&buf)
-                    .map(|val| {
-                        metric::Metric::parse(&val)
-                            .and_then(|metrics| {
-                                for metric in metrics.iter() {
-                                    buckets.add(&metric);
-                                }
-                                Ok(metrics.len())
-                            })
-                            .or_else(|err| {
-                                buckets.add_bad_message();
-                                Err(err)
-                            })
-                            .ok();
+                buf
+                    .and_then(|metrics| {
+                        for metric in metrics.iter() {
+                            buckets.add(&metric);
+                        }
+                        Ok(metrics.len())
+                    })
+                    .or_else(|err| {
+                        buckets.add_bad_message();
+                        Err(err)
                     })
                     .ok();
             }

@@ -1,7 +1,7 @@
-use buckets::Buckets;
-use backends::console;
-use backends::graphite;
-use backends::statsd;
+use crate::buckets::Buckets;
+use crate::backends::console;
+use crate::backends::graphite;
+use crate::backends::statsd;
 
 /// Defines the interface that backends use to publish
 /// metrics to their storage system.
