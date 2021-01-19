@@ -1,4 +1,4 @@
-use buckets::Buckets;
+use crate::buckets::Buckets;
 use time;
 use std::net::TcpStream;
 use std::io::{BufReader, BufRead, Write};

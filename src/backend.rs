@@ -1,7 +1,8 @@
-use buckets::Buckets;
-use backends::console;
-use backends::graphite;
-use backends::statsd;
+use crate::buckets::Buckets;
+use crate::backends::console;
+use crate::backends::graphite;
+use crate::backends::statsd;
+use crate::backends::statsd_zmq;
 
 /// Defines the interface that backends use to publish
 /// metrics to their storage system.
@@ -29,7 +30,9 @@ pub fn factory(console: &bool,
                statsd_host: &str,
                statsd_port: &u16,
                statsd_hosts: &str,
-               statsd_packet_limit: &usize)
+               statsd_packet_limit: &usize,
+               zeromq_backend: &bool,
+               zeromq_hosts: &str)
                -> Box<[Box<dyn Backend>]> {
     let mut backends: Vec<Box<dyn Backend>> = Vec::with_capacity(2);
     if *console {
@@ -62,6 +65,19 @@ pub fn factory(console: &bool,
             hosts_vec, *statsd_packet_limit
         )))
     }
+    if *zeromq_backend {
+        let hosts = zeromq_hosts;
+        let mut hosts_vec: Vec<String> = hosts
+            .split(",")
+            .map(|host| host.trim().to_string())
+            .filter(|host| !host.is_empty())
+            .collect();
+        hosts_vec.sort();
+        hosts_vec.dedup();
+        if hosts_vec.len() > 0 {
+            backends.push(Box::new(statsd_zmq::StatsdZmq::new(hosts_vec)))
+        }
+    }
     backends.into_boxed_slice()
 }
 
@@ -82,7 +98,8 @@ mod test {
             "timers",
             "127.0.0.1", &2300,
             &false, &"", &0,
-            "", &1024
+            "", &1024,
+            &false, ""
         );
         assert_eq!(1, backends.len());
     }
@@ -99,7 +116,8 @@ mod test {
             "timers",
             "127.0.0.1", &2300,
             &false, &"", &0,
-            "", &1024
+            "", &1024,
+            &false, ""
         );
         assert_eq!(1, backends.len());
     }
@@ -116,7 +134,8 @@ mod test {
             "timers",
             "127.0.0.1", &2300,
             &true, &"127.0.0.1", &8125,
-            "", &(16 * 1024)
+            "", &(16 * 1024),
+            &false, ""
         );
         assert_eq!(1, backends.len());
     }
@@ -133,7 +152,8 @@ mod test {
             "timers",
             "127.0.0.1", &2300,
             &false, &"", &0,
-            "", &0
+            "", &0,
+            &false, ""
         );
         assert_eq!(2, backends.len());
     }

@@ -2,7 +2,6 @@
 ///
 use std::fmt;
 
-
 /// Enum of metric types
 pub enum MetricKind {
     Counter(f64), // sample rate
@@ -148,7 +147,7 @@ impl Metric {
 //
 #[cfg(test)]
 mod tests {
-    use metric::{Metric, MetricKind};
+    use crate::metric::{Metric, MetricKind};
     use std::collections::HashMap;
 
     #[test]

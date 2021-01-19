@@ -21,14 +21,26 @@ mod buckets;
 mod backend;
 mod management;
 mod metric_processor;
+
+#[allow(dead_code)]
+mod statsd_batch_capnp {
+    include!(concat!(env!("OUT_DIR"), "/statsd_batch_capnp.rs"));
+}
+
 mod backends {
     pub mod console;
     pub mod graphite;
     pub mod statsd;
+    pub mod statsd_zmq;
 }
 
 fn main() {
     let args = cli::parse_args();
+
+    if args.flag_benchmark {
+        backends::statsd_zmq::benchmarks();
+        return;
+    }
 
     let mut backends = backend::factory(
         &args.flag_console,
@@ -44,7 +56,9 @@ fn main() {
         &args.flag_statsd_host,
         &args.flag_statsd_port,
         &args.flag_statsd_hosts,
-        &args.flag_statsd_packet_size
+        &args.flag_statsd_packet_size,
+        &args.flag_statsd_zmq,
+        &args.flag_statsd_zmq_hosts
     );
 
     let (event_send, event_recv) = sync_channel(1000000);
@@ -75,6 +89,15 @@ fn main() {
     thread::spawn(move || {
         server::udp_server(udp_send, port);
     });
+
+    if args.flag_zeromq_listen {
+        let zmq_send = event_send.clone();
+        let port = args.flag_zeromq_port;
+        println!("ZeroMQ server on 0.0.0.0:{}", port);
+        thread::spawn(move || {
+            backends::statsd_zmq::statsd_zmq_event_emitter(port, zmq_send);
+        });
+    }
 
     // Setup the TCP server for administration
     let tcp_port = args.flag_admin_port;
@@ -126,6 +149,12 @@ fn main() {
                             .ok();
                     })
                     .ok();
+            }
+
+            server::Event::ZmqBatch(batch) => {
+                batch.iterate_optimal(&mut |metric| {
+                    buckets.add(&metric);
+                });
             }
 
             server::Event::TcpMessage(stream) => {

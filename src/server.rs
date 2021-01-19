@@ -10,12 +10,14 @@ use tokio_core::net::{UdpSocket, UdpCodec};
 use tokio_core::reactor::Core;
 use futures::{Stream};
 use futures::future;
+use crate::backends::statsd_zmq::UnpackedZmqBatch;
 
 /// Acceptable event types.
 ///
 pub enum Event {
     UdpMessage(Vec<u8>),
     TcpMessage(TcpStream),
+    ZmqBatch(UnpackedZmqBatch),
     TimerFlush,
 }
 
