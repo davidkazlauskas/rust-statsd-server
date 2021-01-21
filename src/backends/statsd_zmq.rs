@@ -1,6 +1,6 @@
 use super::super::backend::Backend;
 use super::super::buckets::Buckets;
-use super::super::statsd_batch_capnp;
+use super::super::statsd_batch;
 use std::sync::mpsc::SyncSender;
 use crate::server::Event;
 use crate::metric::{Metric, MetricKind};
@@ -48,7 +48,7 @@ pub fn buckets_to_packed_message(buckets: &Buckets) -> (Vec<u8>, usize) {
     let batch_size = stats.len() as u32;
 
     let mut message = capnp::message::Builder::new_default();
-    let mut batch = message.init_root::<statsd_batch_capnp::statsd_batch::Builder>();
+    let mut batch = message.init_root::<statsd_batch::statsd_batch::Builder>();
 
     {
         let mut metric_kinds = batch.reborrow().init_metric_kinds(batch_size);
@@ -58,19 +58,19 @@ pub fn buckets_to_packed_message(buckets: &Buckets) -> (Vec<u8>, usize) {
                 MetricKind::Counter(_) => {
                     metric_kinds.set(
                         pos,
-                        statsd_batch_capnp::statsd_batch::MetricKind::Counter
+                        statsd_batch::statsd_batch::MetricKind::Counter
                     );
                 }
                 MetricKind::Gauge => {
                     metric_kinds.set(
                         pos,
-                        statsd_batch_capnp::statsd_batch::MetricKind::Gauge
+                        statsd_batch::statsd_batch::MetricKind::Gauge
                     );
                 }
                 MetricKind::Timer => {
                     metric_kinds.set(
                         pos,
-                        statsd_batch_capnp::statsd_batch::MetricKind::Timer
+                        statsd_batch::statsd_batch::MetricKind::Timer
                     );
                 }
             }
@@ -121,12 +121,12 @@ pub fn decompress_packed_message(message: &Vec<u8>) -> Option<Vec<u8>> {
 }
 
 pub fn capn_proto_metric_kind_to_domain_metric_kind(
-    kind: statsd_batch_capnp::statsd_batch::MetricKind
+    kind: statsd_batch::statsd_batch::MetricKind
 ) -> MetricKind {
     match kind {
-        statsd_batch_capnp::statsd_batch::MetricKind::Gauge => MetricKind::Gauge,
-        statsd_batch_capnp::statsd_batch::MetricKind::Timer => MetricKind::Timer,
-        statsd_batch_capnp::statsd_batch::MetricKind::Counter => MetricKind::Counter(1.0),
+        statsd_batch::statsd_batch::MetricKind::Gauge => MetricKind::Gauge,
+        statsd_batch::statsd_batch::MetricKind::Timer => MetricKind::Timer,
+        statsd_batch::statsd_batch::MetricKind::Counter => MetricKind::Counter(1.0),
     }
 }
 
@@ -140,13 +140,13 @@ impl UnpackedZmqBatch {
         match decompress_packed_message(compressed_message) {
             Some(decompressed) => {
                 let message = capnp::serialize::read_message(
-                    decompressed.as_slice(),
+                    &mut decompressed.as_slice(),
                     ::capnp::message::ReaderOptions::new()
                 );
                 match message {
                     Ok(message_reader) => {
                         let statsd_batch =
-                            message_reader.get_root::<statsd_batch_capnp::statsd_batch::Reader>();
+                            message_reader.get_root::<statsd_batch::statsd_batch::Reader>();
                         match statsd_batch {
                             Ok(reader) => {
                                 match (reader.get_metric_labels(),
@@ -190,13 +190,13 @@ impl UnpackedZmqBatch {
     pub fn access_readers(&self, f: &mut impl FnMut(
         &capnp::text_list::Reader,
         &capnp::primitive_list::Reader<f64>,
-        &capnp::enum_list::Reader<statsd_batch_capnp::statsd_batch::MetricKind>
+        &capnp::enum_list::Reader<statsd_batch::statsd_batch::MetricKind>
     )) {
         let message = capnp::serialize::read_message(
-        self.decompressed_bytes.as_slice(),
+        &mut self.decompressed_bytes.as_slice(),
         ::capnp::message::ReaderOptions::new()
         ).unwrap();
-        let reader = message.get_root::<statsd_batch_capnp::statsd_batch::Reader>().unwrap();
+        let reader = message.get_root::<statsd_batch::statsd_batch::Reader>().unwrap();
         let labels = reader.get_metric_labels().unwrap();
         let kinds = reader.get_metric_kinds().unwrap();
         let values = reader.get_metric_values().unwrap();
@@ -206,10 +206,10 @@ impl UnpackedZmqBatch {
     // fastest way to iterate currently
     pub fn iterate_optimal(&self, f: &mut impl FnMut(Metric)) {
         let message = capnp::serialize::read_message(
-            self.decompressed_bytes.as_slice(),
+            &mut self.decompressed_bytes.as_slice(),
             ::capnp::message::ReaderOptions::new()
         ).unwrap();
-        let reader = message.get_root::<statsd_batch_capnp::statsd_batch::Reader>().unwrap();
+        let reader = message.get_root::<statsd_batch::statsd_batch::Reader>().unwrap();
         let labels = reader.get_metric_labels().unwrap();
         let kinds = reader.get_metric_kinds().unwrap();
         let values = reader.get_metric_values().unwrap();
@@ -453,7 +453,7 @@ pub fn benchmarks() {
 mod tests {
     use crate::buckets::Buckets;
     use crate::metric::{Metric, MetricKind};
-    use crate::statsd_batch_capnp::statsd_batch;
+    use crate::statsd_batch::statsd_batch;
     use crate::backends::statsd_zmq;
 
     #[test]

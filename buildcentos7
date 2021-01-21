@@ -1,0 +1,4 @@
+#!/bin/bash
+
+docker run --rm -v $(pwd):/project/ rust_statsd_builder:v2 \
+  sh -c 'cd /project/ && cargo build --release && strip /project/target/release/statsd'

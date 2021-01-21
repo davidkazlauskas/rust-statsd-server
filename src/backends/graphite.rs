@@ -108,8 +108,8 @@ impl Backend for Graphite {
                     Ok(_) => {
                         let end = time::get_time();
                         let taken = end - start;
-                        println!("Successfully flushed {} bytes to graphite in {} milliseconds",
-                                 len, taken.num_milliseconds())
+                        println!("Successfully flushed {} bytes, {} total metrics to graphite in {} milliseconds",
+                                 len, taken.num_milliseconds(), buckets.total_messages())
                     },
                     Err(e) => eprintln!("Could not complete write to graphite: {:?}", e),
                 }

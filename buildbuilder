@@ -1,0 +1,3 @@
+#!/bin/bash
+
+docker build -t rust_statsd_builder:v2 .

@@ -21,11 +21,7 @@ mod buckets;
 mod backend;
 mod management;
 mod metric_processor;
-
-#[allow(dead_code)]
-mod statsd_batch_capnp {
-    include!(concat!(env!("OUT_DIR"), "/statsd_batch_capnp.rs"));
-}
+mod statsd_batch;
 
 mod backends {
     pub mod console;
