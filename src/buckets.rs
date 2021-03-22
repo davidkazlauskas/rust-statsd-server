@@ -125,6 +125,10 @@ impl Buckets {
         self.total_messages
     }
 
+    pub fn unique_metrics(&self) -> usize {
+        self.counters.len() + self.timers.len() + self.gauges.len()
+    }
+
     /// Get the initialization time of the buckets.
     pub fn start_time(&self) -> time::Timespec {
         self.server_start_time
