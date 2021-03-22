@@ -76,6 +76,13 @@ impl Graphite {
                buckets.total_messages(),
                start)
             .unwrap();
+        write!(stats,
+               "{}{} {} {}\n",
+               self.global_prefix,
+               "statsd.unique_metrics",
+               buckets.unique_metrics(),
+               start)
+            .unwrap();
 
         for (key, value) in buckets.counters().iter() {
             write!(stats, "{}{} {} {}\n", self.counter_prefix, key,
@@ -156,11 +163,12 @@ mod test {
         let result = graphite.format_stats(&buckets);
         let lines: Vec<&str> = result.lines().collect();
 
-        assert_eq!(4, lines.len());
+        assert_eq!(5, lines.len());
         assert!(lines[0].contains("stats.statsd.bad_messages 0"));
         assert!(lines[1].contains("stats.statsd.total_messages 5"));
-        assert!(lines[2].contains("stats.counters.test.counter 0.5"));
-        assert!(lines[3].contains("stats.gauges.test.gauge 3.211"));
+        assert!(lines[2].contains("stats.statsd.unique_metrics 3"));
+        assert!(lines[3].contains("stats.counters.test.counter 0.5"));
+        assert!(lines[4].contains("stats.gauges.test.gauge 3.211"));
     }
 
     #[test]
@@ -178,7 +186,7 @@ mod test {
         let result = graphite.format_stats(&buckets);
         let lines: Vec<&str> = result.lines().collect();
 
-        assert_eq!(15, lines.len());
+        assert_eq!(16, lines.len());
 
         assert!(result.contains("stats.timers.test.timer.max 12.101"));
         assert!(result.contains("stats.timers.test.timer.min 1.101"));
